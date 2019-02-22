@@ -8,9 +8,11 @@
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
 #include <ESP8266HTTPUpdateServer.h>
+#include <string.h>
 
 const short int OPTO = 2;
 const short int PORT = 5; //GPIO5 SILK WRONG (because IO4)
+const short int POWERPORT = 14; //high = Power for servo and opto
 Servo servo_1; // Giving name to servo.
 int addr = 0;
 
@@ -23,11 +25,23 @@ ESP8266HTTPUpdateServer httpUpdater;
 char wheelpos=0; // 0=open closepos=close    
 char closepos=4; // optotick  /open_close
 int wheeldir=1; // -1== to open , 1=to close
+int poweron = 0;
+const char* webroot = "<a href=\"/open\">Open</a> <a href=\"/close\">Close</a> <a href=\"/power\">Power</a>";
+const char* html = "text/html";
+const char* webopened = "<a href=\"close\">switched on</a>";
+const char* webclosed = "<a href=\"open\">switched off</a>";
+const char* webpower = "<a href=\"power\">power swap</a>";
 
+void sender(const char* content,const char* content2){
+	server.send(200, html, content);	
+	if (strcmp(content2, "")==0){
+		server.send(200, html, content2);	
+	}
+}
 
 void handleRoot() {
   
-  server.send(200, "text/html", "<a href=\"/open\">Open</a> <a href=\"/close\">Close</a>");
+  sender( webroot ,"");
   
 }
 
@@ -70,9 +84,12 @@ void setup(/* arguments */) {
 
 	Serial.begin(115200);
 	pinMode(OPTO, INPUT);
+	pinMode(POWERPORT, OUTPUT);
+	digitalWrite(POWERPORT,HIGH);
+	poweron=1;
 	
 	WiFi.begin(ssid, password);
-	Serial.print("Connecting..222 ");
+	Serial.print("BlindsOpener V1.14 ");
 	/*
 	while (WiFi.waitForConnectResult() != WL_CONNECTED) {
 		Serial.println("Connection Failed! Rebooting...");
@@ -109,17 +126,25 @@ void setup(/* arguments */) {
 
 	server.on("/", handleRoot);
 	server.on("/open", []() {
-    	server.send(200, "text/html", "<a href=\"close\">switched on</a>");
+		sender(webroot , webopened);    	
 		Serial.println("OPEN");
 		toopen();
   	});
 	server.on("/close", []() {
-    	server.send(200, "text/html", "<a href=\"open\">switched off</a>");
+		sender(webroot,webclosed);
+    	
 		Serial.println("CLOSE ");
 		toclose();
   	});
-	server.on("/swap", []() {		
-    	server.send(200, "text/plain", "swapped");
+	server.on("/power", []() {
+		sender(webroot,webpower);
+		if (poweron==1){
+			digitalWrite(POWERPORT,LOW);
+			poweron=0;
+		}else {
+			digitalWrite(POWERPORT,HIGH);
+			poweron=1;
+		}
 		Serial.println("SWAP");
   	});
 	MDNS.begin(host);
